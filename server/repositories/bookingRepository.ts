@@ -67,13 +67,13 @@ function toBookingDetail(row: BookingRow): BookingDetail {
   };
 }
 
-export function getBookingByCode(bookingCode: string): BookingDetail | undefined {
-  const row = db.prepare(`${bookingSelect} WHERE b.booking_code = ?`).get(bookingCode) as BookingRow | undefined;
+export function getBookingByCode(bookingCode: string, userId: number): BookingDetail | undefined {
+  const row = db.prepare(`${bookingSelect} WHERE b.booking_code = ? AND b.user_id = ?`).get(bookingCode, userId) as BookingRow | undefined;
   return row ? toBookingDetail(row) : undefined;
 }
 
-export function listBookings(): BookingDetail[] {
-  const rows = db.prepare(`${bookingSelect} ORDER BY b.created_at DESC, b.id DESC`).all() as BookingRow[];
+export function listBookings(userId: number): BookingDetail[] {
+  const rows = db.prepare(`${bookingSelect} WHERE b.user_id = ? ORDER BY b.created_at DESC, b.id DESC`).all(userId) as BookingRow[];
   return rows.map(toBookingDetail);
 }
 
@@ -88,14 +88,15 @@ export function getOccupiedSeatNumbers(ticketId: number, travelDate: string): st
 
 export function insertBooking(
   bookingCode: string,
+  userId: number,
   ticket: Ticket,
   travelDate: string,
   seats: Array<{ id: number; seat_number: string }>,
   passengers: PassengerInput[],
 ) {
   const booking = db.prepare(`
-    INSERT INTO bookings (booking_code, service_id, travel_date, total_amount) VALUES (?, ?, ?, ?)
-  `).run(bookingCode, ticket.id, travelDate, ticket.price * seats.length);
+    INSERT INTO bookings (booking_code, user_id, service_id, travel_date, total_amount) VALUES (?, ?, ?, ?, ?)
+  `).run(bookingCode, userId, ticket.id, travelDate, ticket.price * seats.length);
   const bookingId = Number(booking.lastInsertRowid);
   const insertPassenger = db.prepare('INSERT INTO passengers (booking_id, full_name, age, gender) VALUES (?, ?, ?, ?)');
   const assignSeat = db.prepare('INSERT INTO booking_seats (booking_id, seat_id, passenger_id) VALUES (?, ?, ?)');
@@ -107,6 +108,6 @@ export function insertBooking(
   return bookingId;
 }
 
-export function cancelBooking(bookingCode: string) {
-  return db.prepare(`UPDATE bookings SET status = 'CANCELLED' WHERE booking_code = ? AND status = 'CONFIRMED'`).run(bookingCode);
+export function cancelBooking(bookingCode: string, userId: number) {
+  return db.prepare(`UPDATE bookings SET status = 'CANCELLED' WHERE booking_code = ? AND user_id = ? AND status = 'CONFIRMED'`).run(bookingCode, userId);
 }

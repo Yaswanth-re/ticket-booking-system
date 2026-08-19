@@ -29,7 +29,7 @@ function generateBookingCode() {
   return `TF-${year}-${randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
-export function createBooking(input: CreateBookingInput): BookingDetail {
+export function createBooking(input: CreateBookingInput, userId: number): BookingDetail {
   if (!Number.isInteger(input.ticketId) || input.ticketId < 1) throw new AppError('Choose a valid service.');
   assertTravelDate(input.travelDate);
   if (!Array.isArray(input.seats) || input.seats.length === 0) throw new AppError('Select at least one seat.');
@@ -49,29 +49,29 @@ export function createBooking(input: CreateBookingInput): BookingDetail {
     if (conflict) throw new AppError(`Seat ${conflict} was just booked. Please choose another seat.`, 409);
 
     const bookingCode = generateBookingCode();
-    insertBooking(bookingCode, ticket, input.travelDate, seats, input.passengers);
-    return getBookingByCode(bookingCode)!;
+    insertBooking(bookingCode, userId, ticket, input.travelDate, seats, input.passengers);
+    return getBookingByCode(bookingCode, userId)!;
   });
   return reserve();
 }
 
-export function getBooking(bookingCode: string) {
-  const booking = getBookingByCode(bookingCode);
+export function getBooking(bookingCode: string, userId: number) {
+  const booking = getBookingByCode(bookingCode, userId);
   if (!booking) throw new AppError('Booking not found.', 404);
   return booking;
 }
 
-export function getAllBookings() {
-  return listBookings();
+export function getAllBookings(userId: number) {
+  return listBookings(userId);
 }
 
-export function cancelExistingBooking(bookingCode: string) {
-  const booking = getBooking(bookingCode);
+export function cancelExistingBooking(bookingCode: string, userId: number) {
+  const booking = getBooking(bookingCode, userId);
   if (booking.status === 'CANCELLED') throw new AppError('This booking has already been cancelled.', 409);
   const cancel = db.transaction(() => {
-    const result = cancelBooking(bookingCode);
+    const result = cancelBooking(bookingCode, userId);
     if (result.changes !== 1) throw new AppError('This booking could not be cancelled.', 409);
-    return getBooking(bookingCode);
+    return getBooking(bookingCode, userId);
   });
   return cancel();
 }

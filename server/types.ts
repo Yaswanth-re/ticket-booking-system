@@ -1,6 +1,12 @@
 export type Gender = 'Female' | 'Male' | 'Other';
 export type BookingStatus = 'CONFIRMED' | 'CANCELLED';
 
+export interface User {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
 export interface Ticket {
   id: number;
   operator: string;

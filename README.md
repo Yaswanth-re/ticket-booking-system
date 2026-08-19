@@ -12,8 +12,9 @@ Booking seats is deceptively stateful: a seat shown as available must still be c
 - Service details with departure, arrival, duration, price, and current availability
 - Live seat map with available, selected, and booked states
 - Passenger validation for name, age, gender, and seat/passenger count
+- Account sign-up, login, logout, and seven-day HTTP-only sessions
 - Booking review and generated references in the `TF-YYYY-XXXXXX` format
-- Persisted booking history, booking details, and cancellation
+- Private, persisted booking history, booking details, and cancellation
 - Cancellation updates the record to `CANCELLED` and releases its seats
 - Responsive interface for desktop and mobile
 - Useful loading, empty, validation, conflict, and server-error states
@@ -39,11 +40,13 @@ The service layer owns booking validation and the database transaction. Reposito
 | --- | --- |
 | `services` | Daily intercity service details and fare |
 | `seats` | Seat template for each service |
-| `bookings` | Booking reference, service, date, status, and total |
+| `users` | Account name, unique email, and scrypt password hash |
+| `sessions` | Opaque, expiring browser-session tokens |
+| `bookings` | Account-owned booking reference, service, date, status, and total |
 | `passengers` | Passenger details belonging to a booking |
 | `booking_seats` | One seat-to-one-passenger assignment inside a booking |
 
-Foreign keys, unique seat mappings, age constraints, and booking-status constraints are enabled. Availability is calculated by excluding seats in `CONFIRMED` bookings for the selected service and travel date.
+Foreign keys, unique seat mappings, age constraints, and booking-status constraints are enabled. Passwords are hashed with Node's `scrypt`; raw passwords are never stored. Availability is calculated by excluding seats in `CONFIRMED` bookings for the selected service and travel date.
 
 ## API
 
@@ -52,6 +55,10 @@ Foreign keys, unique seat mappings, age constraints, and booking-status constrai
 | `GET` | `/api/tickets?source=&destination=&date=` | Search services |
 | `GET` | `/api/tickets/:id?date=` | Get a service and current availability |
 | `GET` | `/api/tickets/:id/seats?date=` | Get the live seat map |
+| `POST` | `/api/auth/signup` | Create an account and start a session |
+| `POST` | `/api/auth/login` | Log in and start a session |
+| `POST` | `/api/auth/logout` | End the current session |
+| `GET` | `/api/auth/me` | Get the signed-in user, if any |
 | `POST` | `/api/bookings` | Create a confirmed booking |
 | `GET` | `/api/bookings` | List persisted bookings |
 | `GET` | `/api/bookings/:id` | Get booking details by booking reference |
@@ -68,9 +75,11 @@ Example booking request:
 }
 ```
 
-## Booking safety
+## Accounts and booking safety
 
-On confirmation, the server validates the service, travel date, seat numbers, passenger details, and one-to-one seat/passenger count. It then starts a SQLite transaction, re-checks all requested seats against current confirmed bookings, inserts the booking and passengers, and assigns the seats. A stale request for an already reserved seat returns HTTP `409 Conflict`.
+Visitors can search before logging in, but confirming a reservation requires an account. Each booking belongs to the signed-in user; history, booking details, and cancellation are scoped on the server to that user. Sessions use opaque random tokens stored in an HTTP-only, same-site cookie and expire after seven days.
+
+On confirmation, the server validates the service, travel date, seat numbers, passenger details, and one-to-one seat/passenger count. It then starts a SQLite transaction, re-checks all requested seats against current confirmed bookings, inserts the account-owned booking and passengers, and assigns the seats. A stale request for an already reserved seat returns HTTP `409 Conflict`.
 
 ## Project structure
 
@@ -110,12 +119,13 @@ npm test         # API integration test
 
 `npm test` runs an isolated API integration test with a temporary SQLite database. It verifies:
 
-1. route search and seeded booked-seat state;
-2. booking creation and persistence;
-3. generated booking-reference format;
-4. double-booking prevention with HTTP `409`;
-5. cancellation; and
-6. rebooking after cancelled seats are released.
+1. signed-out state, sign-up, session lookup, logout, and login;
+2. route search and seeded booked-seat state;
+3. private account booking creation and persistence;
+4. generated booking-reference format and cross-account booking isolation;
+5. double-booking prevention with HTTP `409`;
+6. cancellation; and
+7. rebooking after cancelled seats are released.
 
 ## Screenshots
 
@@ -126,11 +136,10 @@ The responsive home, search-results, seat-selection, passenger, review, confirma
 - SQLite is intentionally chosen for a zero-configuration, locally evaluable persistence layer.
 - Services run daily; availability is determined by service plus travel date, not a frontend counter.
 - There is no payment integration: confirmation directly reserves seats and the UI explicitly states this. This avoids a fake payment flow.
-- Authentication is outside the scope of this compact assignment. `My bookings` displays the local booking history so the full lifecycle remains testable without credentials.
+- Authentication is purposefully lightweight and local: it adds real account ownership without requiring third-party credentials or an external identity provider.
 
 ## Future improvements
 
-- Add user authentication and user-scoped booking history
 - Add boarding and drop-off points
 - Add payment-provider integration and asynchronous payment status
 - Add SQL migration tooling, request logging, and broader UI test coverage

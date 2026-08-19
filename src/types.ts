@@ -5,6 +5,12 @@ export interface SearchValues {
   passengers: number;
 }
 
+export interface User {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
 export interface Ticket {
   id: number;
   operator: string;

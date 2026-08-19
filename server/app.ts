@@ -1,10 +1,12 @@
 import express from 'express';
 import { AppError } from './errors.js';
+import { authRouter } from './routes/auth.js';
 import { bookingsRouter } from './routes/bookings.js';
 import { ticketsRouter } from './routes/tickets.js';
 
 export const app = express();
 app.use(express.json({ limit: '32kb' }));
+app.use('/api/auth', authRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/bookings', bookingsRouter);
 

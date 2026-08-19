@@ -12,6 +12,22 @@ db.pragma('foreign_keys = ON');
 db.pragma('journal_mode = WAL');
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS services (
     id INTEGER PRIMARY KEY,
     operator TEXT NOT NULL,
@@ -38,6 +54,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY,
     booking_code TEXT NOT NULL UNIQUE,
+    user_id INTEGER REFERENCES users(id),
     service_id INTEGER NOT NULL REFERENCES services(id),
     travel_date TEXT NOT NULL,
     status TEXT NOT NULL CHECK(status IN ('CONFIRMED', 'CANCELLED')) DEFAULT 'CONFIRMED',
@@ -63,7 +80,14 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_bookings_service_date_status
     ON bookings(service_id, travel_date, status);
+  CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 `);
+
+const bookingColumns = db.prepare('PRAGMA table_info(bookings)').all() as Array<{ name: string }>;
+if (!bookingColumns.some((column) => column.name === 'user_id')) {
+  db.exec('ALTER TABLE bookings ADD COLUMN user_id INTEGER REFERENCES users(id)');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id)');
 
 type ServiceSeed = [string, string, string, string, string, string, number, number, string];
 
