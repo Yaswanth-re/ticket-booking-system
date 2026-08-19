@@ -93,7 +93,7 @@ type ServiceSeed = [string, string, string, string, string, string, number, numb
 
 function seedDatabase() {
   const serviceCount = (db.prepare('SELECT COUNT(*) AS count FROM services').get() as { count: number }).count;
-  if (serviceCount > 0) return;
+  const isFreshDatabase = serviceCount === 0;
 
   const services: ServiceSeed[] = [
     ['Aster Travels', 'AT 201', 'Chennai', 'Bangalore', '06:30', '12:15', 345, 899, 'AC Seater'],
@@ -102,18 +102,45 @@ function seedDatabase() {
     ['Southbound', 'SB 472', 'Bangalore', 'Chennai', '21:30', '04:30', 420, 1099, 'AC Sleeper'],
     ['Deccan Link', 'DL 330', 'Hyderabad', 'Chennai', '20:45', '08:15', 690, 1299, 'AC Sleeper'],
     ['Coromandel Coach', 'CC 055', 'Chennai', 'Hyderabad', '19:30', '07:00', 690, 1249, 'AC Sleeper'],
+    ['Kaveri Connect', 'KC 810', 'Chennai', 'Coimbatore', '06:00', '13:30', 450, 949, 'AC Seater'],
+    ['Western Wheels', 'WW 291', 'Coimbatore', 'Chennai', '21:45', '05:15', 450, 1049, 'AC Sleeper'],
+    ['Mysore Royale', 'MR 087', 'Bangalore', 'Mysore', '07:00', '10:15', 195, 549, 'AC Seater'],
+    ['Mysore Royale', 'MR 088', 'Mysore', 'Bangalore', '18:15', '21:30', 195, 549, 'AC Seater'],
+    ['Malabar Line', 'ML 510', 'Bangalore', 'Kochi', '21:00', '07:30', 630, 1199, 'AC Sleeper'],
+    ['Malabar Line', 'ML 511', 'Kochi', 'Bangalore', '20:30', '07:00', 630, 1199, 'AC Sleeper'],
+    ['Temple Trail', 'TT 651', 'Chennai', 'Madurai', '22:00', '06:30', 510, 999, 'AC Sleeper'],
+    ['Temple Trail', 'TT 652', 'Madurai', 'Chennai', '08:15', '16:45', 510, 899, 'AC Seater'],
+    ['Krishna Transit', 'KT 214', 'Hyderabad', 'Vijayawada', '07:30', '13:00', 330, 749, 'AC Seater'],
+    ['Krishna Transit', 'KT 215', 'Vijayawada', 'Hyderabad', '18:30', '00:00', 330, 849, 'AC Sleeper'],
+    ['Srinivasa Express', 'SE 902', 'Chennai', 'Tirupati', '06:45', '11:00', 255, 599, 'AC Seater'],
+    ['Srinivasa Express', 'SE 903', 'Tirupati', 'Chennai', '17:30', '21:45', 255, 599, 'AC Seater'],
+    ['Cauvery Coach', 'CA 340', 'Chennai', 'Trichy', '07:00', '12:30', 330, 699, 'AC Seater'],
+    ['Cauvery Coach', 'CA 341', 'Trichy', 'Chennai', '17:00', '22:30', 330, 799, 'AC Sleeper'],
+    ['Konkan Rider', 'KR 176', 'Mumbai', 'Pune', '08:00', '11:45', 225, 649, 'AC Seater'],
+    ['Konkan Rider', 'KR 177', 'Pune', 'Mumbai', '18:30', '22:15', 225, 649, 'AC Seater'],
+    ['Bay Connector', 'BC 460', 'Chennai', 'Pondicherry', '08:30', '12:00', 210, 449, 'AC Seater'],
+    ['Bay Connector', 'BC 461', 'Pondicherry', 'Chennai', '17:30', '21:00', 210, 449, 'AC Seater'],
+    ['Deccan Link', 'DL 640', 'Bangalore', 'Pune', '20:30', '06:45', 615, 1199, 'AC Sleeper'],
+    ['Deccan Link', 'DL 641', 'Pune', 'Bangalore', '21:15', '07:30', 615, 1199, 'AC Sleeper'],
+    ['Southbound', 'SB 624', 'Hyderabad', 'Bangalore', '21:00', '07:15', 615, 1149, 'AC Sleeper'],
+    ['Southbound', 'SB 625', 'Bangalore', 'Hyderabad', '20:15', '06:30', 615, 1149, 'AC Sleeper'],
+    ['Green Coast', 'GC 706', 'Kochi', 'Coimbatore', '08:00', '13:30', 330, 749, 'AC Seater'],
+    ['Green Coast', 'GC 707', 'Coimbatore', 'Kochi', '17:00', '22:30', 330, 749, 'AC Seater'],
+    ['Coromandel Coach', 'CC 216', 'Chennai', 'Bangalore', '22:15', '04:45', 390, 1099, 'AC Sleeper'],
+    ['Aster Travels', 'AT 517', 'Bangalore', 'Chennai', '13:30', '19:15', 345, 849, 'AC Seater'],
   ];
   const insertService = db.prepare(`
-    INSERT INTO services (operator, service_code, source, destination, departure_time, arrival_time, duration_minutes, price, vehicle)
+    INSERT OR IGNORE INTO services (operator, service_code, source, destination, departure_time, arrival_time, duration_minutes, price, vehicle)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertSeat = db.prepare(`
-    INSERT INTO seats (service_id, seat_number, row_number, column_number) VALUES (?, ?, ?, ?)
+    INSERT OR IGNORE INTO seats (service_id, seat_number, row_number, column_number) VALUES (?, ?, ?, ?)
   `);
 
   const seed = db.transaction(() => {
     for (const service of services) {
       const result = insertService.run(...service);
+      if (result.changes === 0) continue;
       const serviceId = Number(result.lastInsertRowid);
       for (let row = 1; row <= 10; row += 1) {
         for (let column = 1; column <= 4; column += 1) {
@@ -122,18 +149,20 @@ function seedDatabase() {
       }
     }
 
-    const date = new Date().toISOString().slice(0, 10);
-    const firstService = db.prepare("SELECT id, price FROM services WHERE service_code = 'AT 201'").get() as { id: number; price: number };
-    const booking = db.prepare(`
-      INSERT INTO bookings (booking_code, service_id, travel_date, total_amount) VALUES (?, ?, ?, ?)
-    `).run('TF-SEED-0001', firstService.id, date, firstService.price * 2);
-    const bookingId = Number(booking.lastInsertRowid);
-    const insertPassenger = db.prepare('INSERT INTO passengers (booking_id, full_name, age, gender) VALUES (?, ?, ?, ?)');
-    const insertBookingSeat = db.prepare('INSERT INTO booking_seats (booking_id, seat_id, passenger_id) VALUES (?, ?, ?)');
-    for (const [name, age, gender, seatNumber] of [['Nila Kumar', 27, 'Female', '1A'], ['Arun Das', 30, 'Male', '1B']] as const) {
-      const passenger = insertPassenger.run(bookingId, name, age, gender);
-      const seat = db.prepare('SELECT id FROM seats WHERE service_id = ? AND seat_number = ?').get(firstService.id, seatNumber) as { id: number };
-      insertBookingSeat.run(bookingId, seat.id, Number(passenger.lastInsertRowid));
+    if (isFreshDatabase) {
+      const date = new Date().toISOString().slice(0, 10);
+      const firstService = db.prepare("SELECT id, price FROM services WHERE service_code = 'AT 201'").get() as { id: number; price: number };
+      const booking = db.prepare(`
+        INSERT INTO bookings (booking_code, service_id, travel_date, total_amount) VALUES (?, ?, ?, ?)
+      `).run('TF-SEED-0001', firstService.id, date, firstService.price * 2);
+      const bookingId = Number(booking.lastInsertRowid);
+      const insertPassenger = db.prepare('INSERT INTO passengers (booking_id, full_name, age, gender) VALUES (?, ?, ?, ?)');
+      const insertBookingSeat = db.prepare('INSERT INTO booking_seats (booking_id, seat_id, passenger_id) VALUES (?, ?, ?)');
+      for (const [name, age, gender, seatNumber] of [['Nila Kumar', 27, 'Female', '1A'], ['Arun Das', 30, 'Male', '1B']] as const) {
+        const passenger = insertPassenger.run(bookingId, name, age, gender);
+        const seat = db.prepare('SELECT id FROM seats WHERE service_id = ? AND seat_number = ?').get(firstService.id, seatNumber) as { id: number };
+        insertBookingSeat.run(bookingId, seat.id, Number(passenger.lastInsertRowid));
+      }
     }
   });
 

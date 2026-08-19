@@ -8,11 +8,11 @@ Booking seats is deceptively stateful: a seat shown as available must still be c
 
 ## Features
 
-- Search daily Chennai, Bangalore, and Hyderabad routes by date and passenger count
+- Search 30+ daily services across Chennai, Bangalore, Hyderabad, Kochi, Coimbatore, Madurai, Mumbai, Pune, and more
 - Service details with departure, arrival, duration, price, and current availability
 - Live seat map with available, selected, and booked states
 - Passenger validation for name, age, gender, and seat/passenger count
-- Account sign-up, login, logout, and seven-day HTTP-only sessions
+- First-name account sign-up, strict password policy, login attempt throttling, logout, and seven-day HTTP-only sessions
 - Booking review and generated references in the `TF-YYYY-XXXXXX` format
 - Private, persisted booking history, booking details, and cancellation
 - Cancellation updates the record to `CANCELLED` and releases its seats
@@ -46,7 +46,7 @@ The service layer owns booking validation and the database transaction. Reposito
 | `passengers` | Passenger details belonging to a booking |
 | `booking_seats` | One seat-to-one-passenger assignment inside a booking |
 
-Foreign keys, unique seat mappings, age constraints, and booking-status constraints are enabled. Passwords are hashed with Node's `scrypt`; raw passwords are never stored. Availability is calculated by excluding seats in `CONFIRMED` bookings for the selected service and travel date.
+Foreign keys, unique seat mappings, age constraints, and booking-status constraints are enabled. Passwords are hashed with Node's `scrypt`; raw passwords are never stored. Sign-up accepts a simple 2–24 letter first name and requires a 10+ character password with uppercase, lowercase, number, and symbol. Five failed login attempts trigger a 15-minute temporary lockout. Availability is calculated by excluding seats in `CONFIRMED` bookings for the selected service and travel date.
 
 ## API
 
@@ -77,7 +77,7 @@ Example booking request:
 
 ## Accounts and booking safety
 
-Visitors can search before logging in, but confirming a reservation requires an account. Each booking belongs to the signed-in user; history, booking details, and cancellation are scoped on the server to that user. Sessions use opaque random tokens stored in an HTTP-only, same-site cookie and expire after seven days.
+Visitors can search before logging in, but confirming a reservation requires an account. Each booking belongs to the signed-in user; history, booking details, and cancellation are scoped on the server to that user. The first name appears in the navigation only after a successful login. Sessions use opaque random tokens stored in an HTTP-only, same-site cookie and expire after seven days.
 
 On confirmation, the server validates the service, travel date, seat numbers, passenger details, and one-to-one seat/passenger count. It then starts a SQLite transaction, re-checks all requested seats against current confirmed bookings, inserts the account-owned booking and passengers, and assigns the seats. A stale request for an already reserved seat returns HTTP `409 Conflict`.
 

@@ -27,7 +27,7 @@ async function api(pathname: string, init?: RequestInit, session?: string) {
 async function signUp(fullName: string, email: string) {
   const response = await api('/auth/signup', {
     method: 'POST',
-    body: JSON.stringify({ fullName, email, password: 'TicketFlow123' }),
+    body: JSON.stringify({ fullName, email, password: 'TicketFlow#123' }),
   });
   assert.equal(response.status, 201);
   const cookie = response.headers.get('set-cookie')?.split(';')[0];
@@ -38,7 +38,7 @@ async function signUp(fullName: string, email: string) {
 async function logIn(email: string) {
   const response = await api('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password: 'TicketFlow123' }),
+    body: JSON.stringify({ email, password: 'TicketFlow#123' }),
   });
   assert.equal(response.status, 200);
   const cookie = response.headers.get('set-cookie')?.split(';')[0];
@@ -58,16 +58,34 @@ test('account bookings persist privately, prevent conflicts, and release cancell
   const search = await api(`/tickets?source=Chennai&destination=Bangalore&date=${travelDate}`);
   assert.equal(search.status, 200);
   const searchBody = await search.json() as { tickets: Array<{ id: number }> };
-  assert.equal(searchBody.tickets.length, 2);
+  assert.equal(searchBody.tickets.length, 3);
+
+  const expandedNetwork = await api(`/tickets?source=Kochi&destination=Bangalore&date=${travelDate}`);
+  assert.equal(expandedNetwork.status, 200);
+  assert.equal((await expandedNetwork.json() as { tickets: unknown[] }).tickets.length, 1);
 
   const signedOutState = await api('/auth/me');
   assert.equal(signedOutState.status, 200);
   assert.equal((await signedOutState.json() as { user: unknown }).user, null);
 
+  const weakPassword = await api('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ fullName: 'Asha', email: `weak-${process.pid}@ticketflow.dev`, password: 'weakpass' }),
+  });
+  assert.equal(weakPassword.status, 400);
+
+  const invalidFirstName = await api('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ fullName: 'Asha Kumar', email: `invalid-${process.pid}@ticketflow.dev`, password: 'TicketFlow#123' }),
+  });
+  assert.equal(invalidFirstName.status, 400);
+
   const email = `test-${process.pid}@ticketflow.dev`;
-  const createdSession = await signUp('Test Traveller', email);
+  const createdSession = await signUp('Test', email);
   const currentUser = await api('/auth/me', undefined, createdSession);
-  assert.equal((await currentUser.json() as { user: { email: string } }).user.email, email);
+  const currentUserBody = await currentUser.json() as { user: { email: string; fullName: string } };
+  assert.equal(currentUserBody.user.email, email);
+  assert.equal(currentUserBody.user.fullName, 'Test');
 
   const logout = await api('/auth/logout', { method: 'POST' }, createdSession);
   assert.equal(logout.status, 204);
@@ -95,7 +113,7 @@ test('account bookings persist privately, prevent conflicts, and release cancell
   const conflict = await api('/bookings', { method: 'POST', body }, session);
   assert.equal(conflict.status, 409);
 
-  const otherSession = await signUp('Other Traveller', `other-${process.pid}@ticketflow.dev`);
+  const otherSession = await signUp('Other', `other-${process.pid}@ticketflow.dev`);
   const privateBooking = await api(`/bookings/${createdBody.booking.bookingCode}`, undefined, otherSession);
   assert.equal(privateBooking.status, 404);
 

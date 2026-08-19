@@ -5,6 +5,9 @@ import { createSession, createUser, findUserByEmail, findUserBySession, removeSe
 import type { User } from '../types.js';
 
 const SESSION_DAYS = 7;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 5;
+const loginFailures = new Map<string, number[]>();
 
 interface Credentials {
   fullName?: unknown;
@@ -17,14 +20,31 @@ function validateEmail(value: unknown) {
   return value.trim().toLowerCase();
 }
 
-function validatePassword(value: unknown) {
-  if (typeof value !== 'string' || value.length < 8) throw new AppError('Password must have at least 8 characters.');
+function validatePassword(value: unknown, isNewPassword = true) {
+  if (typeof value !== 'string' || value.length < 8 || value.length > 128) throw new AppError('Enter a valid password.');
+  if (isNewPassword && (value.length < 10 || !/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/\d/.test(value) || !/[^A-Za-z0-9]/.test(value))) {
+    throw new AppError('Use 10+ characters with uppercase, lowercase, a number, and a symbol.');
+  }
   return value;
 }
 
 function validateFullName(value: unknown) {
-  if (typeof value !== 'string' || value.trim().length < 2) throw new AppError('Enter your full name.');
-  return value.trim();
+  if (typeof value !== 'string' || !/^[A-Za-z]{2,24}$/.test(value.trim())) throw new AppError('Use a simple first name: 2–24 letters only.');
+  const name = value.trim().toLowerCase();
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+}
+
+function assertLoginAllowed(email: string) {
+  const now = Date.now();
+  const attempts = (loginFailures.get(email) ?? []).filter((time) => now - time < LOGIN_WINDOW_MS);
+  loginFailures.set(email, attempts);
+  if (attempts.length >= MAX_LOGIN_ATTEMPTS) throw new AppError('Too many attempts. Please wait 15 minutes before trying again.', 429);
+}
+
+function recordFailedLogin(email: string) {
+  const now = Date.now();
+  const attempts = (loginFailures.get(email) ?? []).filter((time) => now - time < LOGIN_WINDOW_MS);
+  loginFailures.set(email, [...attempts, now]);
 }
 
 function hashPassword(password: string) {
@@ -62,10 +82,15 @@ export function signUp(input: Credentials) {
 
 export function logIn(input: Credentials) {
   const email = validateEmail(input.email);
-  const password = validatePassword(input.password);
+  const password = validatePassword(input.password, false);
+  assertLoginAllowed(email);
   const login = db.transaction(() => {
     const user = findUserByEmail(email);
-    if (!user || !passwordMatches(password, user.password_hash)) throw new AppError('Email or password is incorrect.', 401);
+    if (!user || !passwordMatches(password, user.password_hash)) {
+      recordFailedLogin(email);
+      throw new AppError('Email or password is incorrect.', 401);
+    }
+    loginFailures.delete(email);
     return createAuthenticatedSession({ id: user.id, fullName: user.full_name, email: user.email });
   });
   return login();
