@@ -1,4 +1,4 @@
-export const cities = ['Bangalore', 'Chennai', 'Coimbatore', 'Hyderabad', 'Kochi', 'Madurai', 'Mumbai', 'Mysore', 'Pondicherry', 'Pune', 'Tirupati', 'Trichy', 'Vijayawada'];
+export const cities = ['Bangalore', 'Chennai', 'Coimbatore', 'Delhi', 'Goa', 'Hyderabad', 'Kanyakumari', 'Kochi', 'Madurai', 'Mangalore', 'Mumbai', 'Mysore', 'Ooty', 'Pondicherry', 'Pune', 'Tirupati', 'Trichy', 'Vellore', 'Vijayawada', 'Visakhapatnam'];
 
 export const today = () => new Date().toISOString().slice(0, 10);
 

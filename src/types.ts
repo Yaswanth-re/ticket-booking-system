@@ -23,6 +23,10 @@ export interface Ticket {
   price: number;
   vehicle: string;
   availableSeats: number;
+  rating: number;
+  amenities: string[];
+  boardingPoints: string[];
+  droppingPoints: string[];
 }
 
 export interface Seat {
@@ -39,6 +43,20 @@ export interface Passenger {
   gender: 'Female' | 'Male' | 'Other';
 }
 
+export type PaymentMethod = 'UPI' | 'CARD' | 'WALLET';
+
+export interface Payment {
+  id: number;
+  paymentCode: string;
+  bookingCode: string;
+  amount: number;
+  method: PaymentMethod;
+  status: 'PAID';
+  referenceLabel: string;
+  paidAt: string;
+  ticket?: Pick<Ticket, 'operator' | 'source' | 'destination'>;
+}
+
 export interface Booking {
   id: number;
   bookingCode: string;
@@ -49,4 +67,5 @@ export interface Booking {
   ticket: Ticket;
   seats: string[];
   passengers: Array<Passenger & { seatNumber: string }>;
+  payment?: Payment;
 }

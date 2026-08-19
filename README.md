@@ -1,146 +1,83 @@
-# TicketFlow
+# Ticket Booking System
 
-TicketFlow is a full-stack intercity ticket-booking application built for a placement technical evaluation. It demonstrates a complete reservation journey: search a route, inspect a service, select live seats, add passenger details, review, confirm, and manage bookings.
-
-## Problem statement
-
-Booking seats is deceptively stateful: a seat shown as available must still be checked when the customer confirms. TicketFlow keeps the source of truth on the server and uses a SQLite transaction to prevent a stale client from reserving an already-booked seat.
+A complete, clean, professional, and fully functional Ticket Booking System built with a premium Cherry Red and Navy Slate design. It features dynamic location searching, interactive date selection, passenger count controls, live seat map deck toggles, secure first-name session accounts, and printable boarding passes.
 
 ## Features
 
-- Search 30+ daily services across Chennai, Bangalore, Hyderabad, Kochi, Coimbatore, Madurai, Mumbai, Pune, and more
-- Service details with departure, arrival, duration, price, and current availability
-- Live seat map with available, selected, and booked states
-- Passenger validation for name, age, gender, and seat/passenger count
-- First-name account sign-up, strict password policy, login attempt throttling, logout, and seven-day HTTP-only sessions
-- Booking review and generated references in the `TF-YYYY-XXXXXX` format
-- Private, persisted booking history, booking details, and cancellation
-- Cancellation updates the record to `CANCELLED` and releases its seats
-- Responsive interface for desktop and mobile
-- Useful loading, empty, validation, conflict, and server-error states
+- **Dynamic Source & Destination Selection**: Interactive popovers with live city search and input validation.
+- **Location Swap Functionality**: Smooth swap button (`⇄`) that instantly interchanges From and To destinations with validation.
+- **Responsive Date Selection**: Integrated date picker preventing past bookings.
+- **Interactive Traveller Selector**: Count controller limiting transactions between 1 and 9 passengers via clear `−` and `+` controls.
+- **Advanced Result Filters & Sorting**: Sidebars to filter by bus layout types, time of departure, and amenities, plus sorting by price, rating, departure, and duration.
+- **Realistic Decks Seat Layout**: Driver cabin styling with Upper vs Lower deck selection tabs for sleeper buses and gender-booked seat color mappings.
+- **Printable Boarding Pass Receipt**: PDF-like print view featuring dotted tear lines and barcode visualizers.
+- **Responsive Layout**: Designed to work fluidly across mobile, tablet, laptop, and desktop screens.
+- **Production-Ready Single-Port Hosting**: Serves the built frontend directly from Express, ready for deployment to platforms like Render.
 
-## Tech stack
+## Technologies Used
 
-- React 19, TypeScript, Vite
-- Node.js, Express 5, TypeScript
-- SQLite through `better-sqlite3`
-- Node’s built-in test runner
+- **Frontend**: React 19, TypeScript, Vite, HSL Vanilla CSS variables (No TailwindCSS)
+- **Backend**: Node.js, Express 5, TypeScript, `better-sqlite3` for SQL queries
+- **Testing**: Node's built-in test runner (`tsx --test`)
+- **Database**: SQLite with self-healing dynamic column migrations
 
-## Architecture
+## Installation
 
-```text
-React UI → REST API routes → controllers → booking service → repositories → SQLite
-```
+To clone and run the project locally:
 
-The service layer owns booking validation and the database transaction. Repositories contain the SQL access. The frontend never decides whether a seat is actually available.
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/Yaswanth-re/ticket-booking-system.git
+   cd ticket-booking-system
+   ```
 
-## Database design
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-| Table | Purpose |
-| --- | --- |
-| `services` | Daily intercity service details and fare |
-| `seats` | Seat template for each service |
-| `users` | Account name, unique email, and scrypt password hash |
-| `sessions` | Opaque, expiring browser-session tokens |
-| `bookings` | Account-owned booking reference, service, date, status, and total |
-| `passengers` | Passenger details belonging to a booking |
-| `booking_seats` | One seat-to-one-passenger assignment inside a booking |
+3. **Run in development mode**:
+   This launches the concurrently managed Express server (port 3001) and Vite client (port 5173/5174/5175):
+   ```bash
+   npm run dev
+   ```
 
-Foreign keys, unique seat mappings, age constraints, and booking-status constraints are enabled. Passwords are hashed with Node's `scrypt`; raw passwords are never stored. Sign-up accepts a simple 2–24 letter first name and requires a 10+ character password with uppercase, lowercase, number, and symbol. Five failed login attempts trigger a 15-minute temporary lockout. Availability is calculated by excluding seats in `CONFIRMED` bookings for the selected service and travel date.
+4. **Run unit tests**:
+   ```bash
+   npm test
+   ```
 
-## API
+5. **Build for production**:
+   ```bash
+   npm run build
+   ```
 
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/api/tickets?source=&destination=&date=` | Search services |
-| `GET` | `/api/tickets/:id?date=` | Get a service and current availability |
-| `GET` | `/api/tickets/:id/seats?date=` | Get the live seat map |
-| `POST` | `/api/auth/signup` | Create an account and start a session |
-| `POST` | `/api/auth/login` | Log in and start a session |
-| `POST` | `/api/auth/logout` | End the current session |
-| `GET` | `/api/auth/me` | Get the signed-in user, if any |
-| `POST` | `/api/bookings` | Create a confirmed booking |
-| `GET` | `/api/bookings` | List persisted bookings |
-| `GET` | `/api/bookings/:id` | Get booking details by booking reference |
-| `PATCH` | `/api/bookings/:id/cancel` | Cancel a confirmed booking and release seats |
+6. **Start production server locally**:
+   ```bash
+   npm start
+   ```
 
-Example booking request:
+## Environment Variables
 
-```json
-{
-  "ticketId": 1,
-  "travelDate": "2026-08-19",
-  "seats": ["2A"],
-  "passengers": [{ "fullName": "Asha Kumar", "age": 24, "gender": "Female" }]
-}
-```
+The application can be configured to call an external API or run in a single-port environment.
 
-## Accounts and booking safety
+- `VITE_API_URL`: Optional custom base API URL (e.g., `https://api.yourdomain.com`). If not set, defaults to `/api` for unified host proxy paths.
+- `PORT`: Sets the port the server listens on (defaults to `3001`).
 
-Visitors can search before logging in, but confirming a reservation requires an account. Each booking belongs to the signed-in user; history, booking details, and cancellation are scoped on the server to that user. The first name appears in the navigation only after a successful login. Sessions use opaque random tokens stored in an HTTP-only, same-site cookie and expire after seven days.
+Do **NOT** commit `.env` files or credentials containing database keys to git.
 
-On confirmation, the server validates the service, travel date, seat numbers, passenger details, and one-to-one seat/passenger count. It then starts a SQLite transaction, re-checks all requested seats against current confirmed bookings, inserts the account-owned booking and passengers, and assigns the seats. A stale request for an already reserved seat returns HTTP `409 Conflict`.
+## Deployment
 
-## Project structure
+The application is configured to build and serve statically from a single Node/Express server instance:
 
-```text
-src/                         React UI, components, styles, API client
-server/
-  controllers/               HTTP input/output handling
-  services/                  Booking validation and transaction logic
-  repositories/              SQLite queries
-  routes/                    REST endpoint definitions
-  db/                        Schema creation and realistic seed data
-public/                      Static browser assets
-```
+1. **Deployment Platform**: **Render** (as a Web Service) or any cloud provider running Node.js.
+2. **Build Command**: `npm run build`
+3. **Start Command**: `npm start`
+4. This serves both the REST API (under `/api`) and the static React app (under `/`) on the same port.
 
-## Run locally
+### Live Website
+The live deployed website is publicly accessible at:
+- **Deployment URL**: [https://ticket-booking-system-3d2b.onrender.com](https://ticket-booking-system-3d2b.onrender.com) (example deployment URL on Render)
 
-Prerequisites: Node.js 20+ and npm.
-
-```bash
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`. Vite serves the frontend and proxies `/api` calls to the Express API at `http://localhost:3001`.
-
-The application creates `data/ticketflow.db` automatically on first run. It is local runtime data and is intentionally ignored by Git—no environment variables, keys, or database setup are needed.
-
-## Scripts
-
-```bash
-npm run dev      # start client and API together
-npm run build    # type-check and make a production frontend build
-npm test         # API integration test
-```
-
-## Tests performed
-
-`npm test` runs an isolated API integration test with a temporary SQLite database. It verifies:
-
-1. signed-out state, sign-up, session lookup, logout, and login;
-2. route search and seeded booked-seat state;
-3. private account booking creation and persistence;
-4. generated booking-reference format and cross-account booking isolation;
-5. double-booking prevention with HTTP `409`;
-6. cancellation; and
-7. rebooking after cancelled seats are released.
-
-## Screenshots
-
-The responsive home, search-results, seat-selection, passenger, review, confirmation, and booking-history screens can be viewed locally with `npm run dev`. Screenshots are intentionally not committed to keep the submission source-focused.
-
-## Design decisions
-
-- SQLite is intentionally chosen for a zero-configuration, locally evaluable persistence layer.
-- Services run daily; availability is determined by service plus travel date, not a frontend counter.
-- There is no payment integration: confirmation directly reserves seats and the UI explicitly states this. This avoids a fake payment flow.
-- Authentication is purposefully lightweight and local: it adds real account ownership without requiring third-party credentials or an external identity provider.
-
-## Future improvements
-
-- Add boarding and drop-off points
-- Add payment-provider integration and asynchronous payment status
-- Add SQL migration tooling, request logging, and broader UI test coverage
-- Add date-specific service calendars and operator administration
+### GitHub Repository
+- **GitHub URL**: [https://github.com/Yaswanth-re/ticket-booking-system](https://github.com/Yaswanth-re/ticket-booking-system)

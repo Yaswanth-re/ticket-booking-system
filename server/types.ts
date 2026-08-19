@@ -1,5 +1,7 @@
 export type Gender = 'Female' | 'Male' | 'Other';
 export type BookingStatus = 'CONFIRMED' | 'CANCELLED';
+export type PaymentMethod = 'UPI' | 'CARD' | 'WALLET';
+export type PaymentStatus = 'PAID';
 
 export interface User {
   id: number;
@@ -19,6 +21,10 @@ export interface Ticket {
   price: number;
   vehicle: string;
   availableSeats: number;
+  rating: number;
+  amenities: string[];
+  boardingPoints: string[];
+  droppingPoints: string[];
 }
 
 export interface Seat {
@@ -40,6 +46,24 @@ export interface CreateBookingInput {
   travelDate: string;
   seats: string[];
   passengers: PassengerInput[];
+  payment: PaymentInput;
+}
+
+export interface PaymentInput {
+  method: PaymentMethod;
+  reference: string;
+}
+
+export interface Payment {
+  id: number;
+  paymentCode: string;
+  bookingCode: string;
+  amount: number;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  referenceLabel: string;
+  paidAt: string;
+  ticket?: Pick<Ticket, 'operator' | 'source' | 'destination'>;
 }
 
 export interface BookingDetail {
@@ -52,4 +76,5 @@ export interface BookingDetail {
   ticket: Ticket;
   seats: string[];
   passengers: Array<PassengerInput & { seatNumber: string }>;
+  payment?: Payment;
 }

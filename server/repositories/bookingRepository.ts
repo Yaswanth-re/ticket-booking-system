@@ -1,5 +1,6 @@
 import { db } from '../db/index.js';
 import type { BookingDetail, PassengerInput, Ticket } from '../types.js';
+import { getPaymentForBooking } from './paymentRepository.js';
 
 interface BookingRow {
   id: number;
@@ -18,12 +19,16 @@ interface BookingRow {
   duration_minutes: number;
   price: number;
   vehicle: string;
+  rating: number;
+  amenities: string | null;
+  boarding_points: string | null;
+  dropping_points: string | null;
 }
 
 const bookingSelect = `
   SELECT b.id, b.booking_code, b.status, b.travel_date, b.total_amount, b.created_at, s.id AS service_id,
     s.operator, s.service_code, s.source, s.destination, s.departure_time, s.arrival_time,
-    s.duration_minutes, s.price, s.vehicle
+    s.duration_minutes, s.price, s.vehicle, s.rating, s.amenities, s.boarding_points, s.dropping_points
   FROM bookings b JOIN services s ON s.id = b.service_id
 `;
 
@@ -48,6 +53,10 @@ function toBookingDetail(row: BookingRow): BookingDetail {
     price: row.price,
     vehicle: row.vehicle,
     availableSeats: 0,
+    rating: row.rating ?? 4.0,
+    amenities: row.amenities ? row.amenities.split(', ') : [],
+    boardingPoints: row.boarding_points ? row.boarding_points.split(', ') : [],
+    droppingPoints: row.dropping_points ? row.dropping_points.split(', ') : [],
   };
   return {
     id: row.id,
@@ -64,6 +73,7 @@ function toBookingDetail(row: BookingRow): BookingDetail {
       gender: passenger.gender,
       seatNumber: passenger.seat_number,
     })),
+    payment: getPaymentForBooking(row.id),
   };
 }
 

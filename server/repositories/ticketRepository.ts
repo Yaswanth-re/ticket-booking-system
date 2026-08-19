@@ -12,10 +12,14 @@ interface TicketRow {
   duration_minutes: number;
   price: number;
   vehicle: string;
+  rating: number;
+  amenities: string | null;
+  boarding_points: string | null;
+  dropping_points: string | null;
 }
 
 const baseSelect = `
-  SELECT id, operator, service_code, source, destination, departure_time, arrival_time, duration_minutes, price, vehicle
+  SELECT id, operator, service_code, source, destination, departure_time, arrival_time, duration_minutes, price, vehicle, rating, amenities, boarding_points, dropping_points
   FROM services WHERE active = 1
 `;
 
@@ -32,6 +36,10 @@ function toTicket(row: TicketRow, availableSeats: number): Ticket {
     price: row.price,
     vehicle: row.vehicle,
     availableSeats,
+    rating: row.rating ?? 4.0,
+    amenities: row.amenities ? row.amenities.split(', ') : [],
+    boardingPoints: row.boarding_points ? row.boarding_points.split(', ') : [],
+    droppingPoints: row.dropping_points ? row.dropping_points.split(', ') : [],
   };
 }
 

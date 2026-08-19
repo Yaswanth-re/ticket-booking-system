@@ -39,7 +39,11 @@ db.exec(`
     duration_minutes INTEGER NOT NULL CHECK(duration_minutes > 0),
     price INTEGER NOT NULL CHECK(price > 0),
     vehicle TEXT NOT NULL,
-    active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1))
+    active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+    rating REAL DEFAULT 4.0,
+    amenities TEXT,
+    boarding_points TEXT,
+    dropping_points TEXT
   );
 
   CREATE TABLE IF NOT EXISTS seats (
@@ -78,9 +82,22 @@ db.exec(`
     UNIQUE(booking_id, passenger_id)
   );
 
+  CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY,
+    booking_id INTEGER NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    payment_code TEXT NOT NULL UNIQUE,
+    amount INTEGER NOT NULL CHECK(amount > 0),
+    method TEXT NOT NULL CHECK(method IN ('UPI', 'CARD', 'WALLET')),
+    status TEXT NOT NULL CHECK(status IN ('PAID')) DEFAULT 'PAID',
+    reference_label TEXT NOT NULL,
+    paid_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_bookings_service_date_status
     ON bookings(service_id, travel_date, status);
   CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+  CREATE INDEX IF NOT EXISTS idx_payments_user_paid_at ON payments(user_id, paid_at DESC);
 `);
 
 const bookingColumns = db.prepare('PRAGMA table_info(bookings)').all() as Array<{ name: string }>;
@@ -88,6 +105,30 @@ if (!bookingColumns.some((column) => column.name === 'user_id')) {
   db.exec('ALTER TABLE bookings ADD COLUMN user_id INTEGER REFERENCES users(id)');
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id)');
+
+const serviceColumns = db.prepare('PRAGMA table_info(services)').all() as Array<{ name: string }>;
+if (!serviceColumns.some((column) => column.name === 'rating')) {
+  db.exec('ALTER TABLE services ADD COLUMN rating REAL DEFAULT 4.0');
+}
+if (!serviceColumns.some((column) => column.name === 'amenities')) {
+  db.exec('ALTER TABLE services ADD COLUMN amenities TEXT');
+}
+if (!serviceColumns.some((column) => column.name === 'boarding_points')) {
+  db.exec('ALTER TABLE services ADD COLUMN boarding_points TEXT');
+}
+if (!serviceColumns.some((column) => column.name === 'dropping_points')) {
+  db.exec('ALTER TABLE services ADD COLUMN dropping_points TEXT');
+}
+
+// Seed dynamically or set default values if they are null for existing rows
+db.exec(`
+  UPDATE services SET
+    rating = COALESCE(rating, 4.0 + (id % 10) * 0.1),
+    amenities = COALESCE(amenities, CASE WHEN vehicle LIKE '%Sleeper%' THEN 'Wi-Fi, Charging Point, Water Bottle, Blanket' ELSE 'Charging Point, Water Bottle' END),
+    boarding_points = COALESCE(boarding_points, source || ' Central Bus Stand, ' || source || ' Bypass Road'),
+    dropping_points = COALESCE(dropping_points, destination || ' Central Plaza, ' || destination || ' Drop Circle')
+  WHERE rating IS NULL OR amenities IS NULL OR boarding_points IS NULL OR dropping_points IS NULL
+`);
 
 type ServiceSeed = [string, string, string, string, string, string, number, number, string];
 
@@ -128,10 +169,73 @@ function seedDatabase() {
     ['Green Coast', 'GC 707', 'Coimbatore', 'Kochi', '17:00', '22:30', 330, 749, 'AC Seater'],
     ['Coromandel Coach', 'CC 216', 'Chennai', 'Bangalore', '22:15', '04:45', 390, 1099, 'AC Sleeper'],
     ['Aster Travels', 'AT 517', 'Bangalore', 'Chennai', '13:30', '19:15', 345, 849, 'AC Seater'],
+    ['Hillway Transit', 'HT 370', 'Bangalore', 'Mangalore', '21:30', '07:00', 570, 1099, 'AC Sleeper'],
+    ['Hillway Transit', 'HT 371', 'Mangalore', 'Bangalore', '20:45', '06:15', 570, 1099, 'AC Sleeper'],
+    ['Coastal Express', 'CE 442', 'Hyderabad', 'Visakhapatnam', '20:00', '07:45', 705, 1299, 'AC Sleeper'],
+    ['Coastal Express', 'CE 443', 'Visakhapatnam', 'Hyderabad', '19:15', '07:00', 705, 1299, 'AC Sleeper'],
+    ['Golden Route', 'GR 120', 'Chennai', 'Vellore', '07:30', '10:45', 195, 449, 'AC Seater'],
+    ['Golden Route', 'GR 121', 'Vellore', 'Chennai', '17:15', '20:30', 195, 449, 'AC Seater'],
+    ['Temple Trail', 'TT 773', 'Coimbatore', 'Madurai', '08:15', '13:30', 315, 699, 'AC Seater'],
+    ['Temple Trail', 'TT 774', 'Madurai', 'Coimbatore', '17:30', '22:45', 315, 699, 'AC Seater'],
+    ['Sahyadri Lines', 'SL 250', 'Pune', 'Goa', '21:00', '08:30', 690, 1349, 'AC Sleeper'],
+    ['Sahyadri Lines', 'SL 251', 'Goa', 'Pune', '20:15', '07:45', 690, 1349, 'AC Sleeper'],
+    ['Nilgiri Coach', 'NC 412', 'Bangalore', 'Ooty', '06:30', '13:00', 390, 899, 'AC Seater'],
+    ['Nilgiri Coach', 'NC 413', 'Ooty', 'Bangalore', '14:30', '21:00', 390, 899, 'AC Seater'],
+    ['Cape Connect', 'CP 980', 'Chennai', 'Kanyakumari', '19:00', '07:30', 750, 1399, 'AC Sleeper'],
+    ['Cape Connect', 'CP 981', 'Kanyakumari', 'Chennai', '18:30', '07:00', 750, 1399, 'AC Sleeper'],
+    ['Deccan Link', 'DL 821', 'Hyderabad', 'Pune', '21:45', '07:45', 600, 1199, 'AC Sleeper'],
+    ['Deccan Link', 'DL 822', 'Pune', 'Hyderabad', '20:30', '06:30', 600, 1199, 'AC Sleeper'],
+    ['Western Wheels', 'WW 520', 'Mumbai', 'Goa', '22:00', '08:45', 645, 1399, 'AC Sleeper'],
+    ['Western Wheels', 'WW 521', 'Goa', 'Mumbai', '21:15', '08:00', 645, 1399, 'AC Sleeper'],
+    ['Southbound', 'SB 704', 'Bangalore', 'Chennai', '16:30', '22:15', 345, 849, 'AC Seater'],
+    ['Aster Travels', 'AT 705', 'Chennai', 'Bangalore', '14:15', '20:00', 345, 849, 'AC Seater'],
+    
+    // Additional premium buses
+    ['VRL Travels', 'VL 301', 'Mumbai', 'Goa', '18:00', '06:30', 750, 1499, 'AC Sleeper'],
+    ['KSRTC', 'KS 102', 'Bangalore', 'Mysore', '09:30', '12:45', 195, 499, 'AC Seater'],
+    ['SRS Travels', 'SR 405', 'Bangalore', 'Hyderabad', '21:30', '07:00', 570, 1099, 'AC Sleeper'],
+    ['BlueLine Express', 'BL 506', 'Hyderabad', 'Bangalore', '22:00', '07:30', 570, 1149, 'AC Sleeper'],
+    ['Zingbus', 'ZB 801', 'Pune', 'Mumbai', '06:00', '09:30', 210, 549, 'AC Seater'],
+    ['Zingbus', 'ZB 802', 'Mumbai', 'Pune', '16:00', '19:30', 210, 599, 'AC Seater'],
+    ['National Travels', 'NT 901', 'Hyderabad', 'Chennai', '19:00', '06:30', 690, 1199, 'AC Sleeper'],
+    ['National Travels', 'NT 902', 'Chennai', 'Hyderabad', '20:00', '07:30', 690, 1199, 'AC Sleeper'],
+    ['Parveen Travels', 'PT 701', 'Chennai', 'Madurai', '21:00', '05:30', 510, 899, 'AC Sleeper'],
+    ['Parveen Travels', 'PT 702', 'Madurai', 'Chennai', '22:30', '07:00', 510, 899, 'AC Sleeper'],
+    ['IntrCity SmartBus', 'IC 113', 'Bangalore', 'Chennai', '15:00', '21:30', 390, 949, 'AC Sleeper'],
+    ['KSRTC Swarna', 'KS 789', 'Bangalore', 'Mangalore', '22:30', '07:30', 540, 999, 'AC Sleeper'],
+    ['Orange Tours', 'OT 555', 'Hyderabad', 'Visakhapatnam', '18:45', '06:15', 690, 1399, 'AC Sleeper'],
+    ['Orange Tours', 'OT 556', 'Visakhapatnam', 'Hyderabad', '19:45', '07:15', 690, 1399, 'AC Sleeper'],
+
+    // Additional popular routes premium buses
+    ['VRL Travels', 'VL 302', 'Goa', 'Mumbai', '19:00', '07:30', 750, 1499, 'AC Sleeper'],
+    ['KSRTC', 'KS 103', 'Mysore', 'Bangalore', '14:30', '17:45', 195, 499, 'AC Seater'],
+    ['KSRTC Airavat', 'KA 401', 'Bangalore', 'Hyderabad', '13:00', '21:30', 510, 999, 'AC Seater'],
+    ['KSRTC Airavat', 'KA 402', 'Hyderabad', 'Bangalore', '14:00', '22:30', 510, 999, 'AC Seater'],
+    ['Jabbar Travels', 'JT 881', 'Bangalore', 'Hyderabad', '22:15', '07:45', 570, 1199, 'AC Sleeper'],
+    ['Jabbar Travels', 'JT 882', 'Hyderabad', 'Bangalore', '21:45', '07:15', 570, 1199, 'AC Sleeper'],
+    ['SRS Travels', 'SR 406', 'Hyderabad', 'Bangalore', '20:30', '06:00', 570, 1099, 'AC Sleeper'],
+    ['Zingbus', 'ZB 803', 'Mumbai', 'Pune', '08:30', '12:00', 210, 549, 'AC Seater'],
+    ['Zingbus', 'ZB 804', 'Pune', 'Mumbai', '14:30', '18:00', 210, 549, 'AC Seater'],
+    ['Neeta Travels', 'NT 551', 'Mumbai', 'Pune', '10:00', '13:30', 210, 590, 'AC Seater'],
+    ['Neeta Travels', 'NT 552', 'Pune', 'Mumbai', '17:00', '20:30', 210, 590, 'AC Seater'],
+    ['Orange Tours', 'OT 121', 'Mumbai', 'Goa', '17:00', '05:30', 750, 1549, 'AC Sleeper'],
+    ['Orange Tours', 'OT 122', 'Goa', 'Mumbai', '18:30', '07:00', 750, 1549, 'AC Sleeper'],
+    ['Atmaram Travels', 'AM 991', 'Mumbai', 'Goa', '19:30', '08:00', 750, 1450, 'AC Sleeper'],
+    ['Atmaram Travels', 'AM 992', 'Goa', 'Mumbai', '20:00', '08:30', 750, 1450, 'AC Sleeper'],
+    ['IntrCity SmartBus', 'IC 221', 'Mumbai', 'Goa', '20:30', '09:00', 750, 1599, 'AC Sleeper'],
+    ['Paulo Travels', 'PT 331', 'Pune', 'Goa', '19:45', '07:00', 675, 1299, 'AC Sleeper'],
+    ['Paulo Travels', 'PT 332', 'Goa', 'Pune', '20:30', '07:45', 675, 1299, 'AC Sleeper'],
+    ['Zingbus', 'ZB 771', 'Pune', 'Goa', '21:30', '08:45', 675, 1199, 'AC Sleeper'],
+    ['Zingbus', 'ZB 772', 'Goa', 'Pune', '21:00', '08:15', 675, 1199, 'AC Sleeper'],
+    ['Parveen Travels', 'PV 441', 'Chennai', 'Coimbatore', '10:00', '18:00', 480, 899, 'AC Seater'],
+    ['Parveen Travels', 'PV 442', 'Coimbatore', 'Chennai', '13:00', '21:00', 480, 899, 'AC Seater'],
+    ['No 1 Air Travels', 'NO 101', 'Chennai', 'Coimbatore', '21:30', '05:30', 480, 1099, 'AC Sleeper'],
+    ['No 1 Air Travels', 'NO 102', 'Coimbatore', 'Chennai', '22:00', '06:00', 480, 1099, 'AC Sleeper']
   ];
+
   const insertService = db.prepare(`
-    INSERT OR IGNORE INTO services (operator, service_code, source, destination, departure_time, arrival_time, duration_minutes, price, vehicle)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO services (operator, service_code, source, destination, departure_time, arrival_time, duration_minutes, price, vehicle, rating, amenities, boarding_points, dropping_points)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertSeat = db.prepare(`
     INSERT OR IGNORE INTO seats (service_id, seat_number, row_number, column_number) VALUES (?, ?, ?, ?)
@@ -139,7 +243,21 @@ function seedDatabase() {
 
   const seed = db.transaction(() => {
     for (const service of services) {
-      const result = insertService.run(...service);
+      const [operator, serviceCode, source, destination, departureTime, arrivalTime, durationMinutes, price, vehicle] = service;
+      
+      const rating = parseFloat((4.0 + (serviceCode.charCodeAt(serviceCode.length - 1) % 10) * 0.1).toFixed(1));
+      
+      const amenitiesList = vehicle.includes('Sleeper')
+        ? 'Wi-Fi, Charging Point, Pillow, Blanket, Water Bottle'
+        : 'Charging Point, Reading Light, Water Bottle';
+        
+      const boardingPoints = `${source} Bus Station, ${source} Bypass, ${source} Toll Plaza`;
+      const droppingPoints = `${destination} Bus Stand, ${destination} Center, ${destination} Drop Circle`;
+
+      const result = insertService.run(
+        operator, serviceCode, source, destination, departureTime, arrivalTime, durationMinutes, price, vehicle,
+        rating, amenitiesList, boardingPoints, droppingPoints
+      );
       if (result.changes === 0) continue;
       const serviceId = Number(result.lastInsertRowid);
       for (let row = 1; row <= 10; row += 1) {

@@ -2,8 +2,10 @@ import { randomBytes } from 'node:crypto';
 import { db } from '../db/index.js';
 import { AppError } from '../errors.js';
 import { cancelBooking, getBookingByCode, getOccupiedSeatNumbers, insertBooking, listBookings } from '../repositories/bookingRepository.js';
+import { insertPayment } from '../repositories/paymentRepository.js';
 import { findSeatIds, findTicket } from '../repositories/ticketRepository.js';
 import type { BookingDetail, CreateBookingInput, PassengerInput } from '../types.js';
+import { validatePayment } from './paymentService.js';
 
 function assertTravelDate(travelDate: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(travelDate) || Number.isNaN(new Date(`${travelDate}T00:00:00`).getTime())) {
@@ -29,6 +31,11 @@ function generateBookingCode() {
   return `TF-${year}-${randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
+function generatePaymentCode() {
+  const year = new Date().getUTCFullYear();
+  return `PAY-${year}-${randomBytes(4).toString('hex').toUpperCase()}`;
+}
+
 export function createBooking(input: CreateBookingInput, userId: number): BookingDetail {
   if (!Number.isInteger(input.ticketId) || input.ticketId < 1) throw new AppError('Choose a valid service.');
   assertTravelDate(input.travelDate);
@@ -36,6 +43,7 @@ export function createBooking(input: CreateBookingInput, userId: number): Bookin
   if (new Set(input.seats).size !== input.seats.length) throw new AppError('A seat can only be selected once.');
   validatePassengers(input.passengers);
   if (input.seats.length !== input.passengers.length) throw new AppError('Select one seat for each passenger.');
+  const payment = validatePayment(input.payment);
 
   const reserve = db.transaction(() => {
     const ticket = findTicket(input.ticketId, input.travelDate);
@@ -49,7 +57,8 @@ export function createBooking(input: CreateBookingInput, userId: number): Bookin
     if (conflict) throw new AppError(`Seat ${conflict} was just booked. Please choose another seat.`, 409);
 
     const bookingCode = generateBookingCode();
-    insertBooking(bookingCode, userId, ticket, input.travelDate, seats, input.passengers);
+    const bookingId = insertBooking(bookingCode, userId, ticket, input.travelDate, seats, input.passengers);
+    insertPayment(bookingId, userId, generatePaymentCode(), ticket.price * seats.length, payment.method, payment.referenceLabel);
     return getBookingByCode(bookingCode, userId)!;
   });
   return reserve();

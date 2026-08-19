@@ -58,7 +58,7 @@ test('account bookings persist privately, prevent conflicts, and release cancell
   const search = await api(`/tickets?source=Chennai&destination=Bangalore&date=${travelDate}`);
   assert.equal(search.status, 200);
   const searchBody = await search.json() as { tickets: Array<{ id: number }> };
-  assert.equal(searchBody.tickets.length, 3);
+  assert.equal(searchBody.tickets.length, 4);
 
   const expandedNetwork = await api(`/tickets?source=Kochi&destination=Bangalore&date=${travelDate}`);
   assert.equal(expandedNetwork.status, 200);
@@ -102,13 +102,23 @@ test('account bookings persist privately, prevent conflicts, and release cancell
     travelDate,
     seats: ['2A'],
     passengers: [{ fullName: 'Test Traveller', age: 24, gender: 'Other' }],
+    payment: { method: 'UPI', reference: 'test@upi' },
   });
   const created = await api('/bookings', { method: 'POST', body }, session);
   assert.equal(created.status, 201);
-  const createdBody = await created.json() as { booking: { bookingCode: string; status: string; seats: string[] } };
+  const createdBody = await created.json() as { booking: { bookingCode: string; status: string; seats: string[]; payment: { paymentCode: string; method: string; amount: number } } };
   assert.match(createdBody.booking.bookingCode, /^TF-\d{4}-[A-F0-9]{6}$/);
   assert.equal(createdBody.booking.status, 'CONFIRMED');
   assert.deepEqual(createdBody.booking.seats, ['2A']);
+  assert.match(createdBody.booking.payment.paymentCode, /^PAY-\d{4}-[A-F0-9]{8}$/);
+  assert.equal(createdBody.booking.payment.method, 'UPI');
+  assert.equal(createdBody.booking.payment.amount, 899);
+
+  const payments = await api('/payments', undefined, session);
+  const paymentsBody = await payments.json() as { payments: Array<{ bookingCode: string; referenceLabel: string }> };
+  assert.equal(paymentsBody.payments.length, 1);
+  assert.equal(paymentsBody.payments[0].bookingCode, createdBody.booking.bookingCode);
+  assert.equal(paymentsBody.payments[0].referenceLabel, 'test@upi');
 
   const conflict = await api('/bookings', { method: 'POST', body }, session);
   assert.equal(conflict.status, 409);
@@ -116,6 +126,8 @@ test('account bookings persist privately, prevent conflicts, and release cancell
   const otherSession = await signUp('Other', `other-${process.pid}@ticketflow.dev`);
   const privateBooking = await api(`/bookings/${createdBody.booking.bookingCode}`, undefined, otherSession);
   assert.equal(privateBooking.status, 404);
+  const privatePayments = await api('/payments', undefined, otherSession);
+  assert.equal((await privatePayments.json() as { payments: unknown[] }).payments.length, 0);
 
   const cancelled = await api(`/bookings/${createdBody.booking.bookingCode}/cancel`, { method: 'PATCH' }, session);
   assert.equal(cancelled.status, 200);
@@ -126,9 +138,12 @@ test('account bookings persist privately, prevent conflicts, and release cancell
     travelDate,
     seats: ['2A'],
     passengers: [{ fullName: 'Second Traveller', age: 29, gender: 'Male' }],
+    payment: { method: 'CARD', reference: '2048' },
   }) }, session);
   assert.equal(rebooked.status, 201);
 
   const mine = await api('/bookings', undefined, session);
   assert.equal((await mine.json() as { bookings: unknown[] }).bookings.length, 2);
+  const paymentHistory = await api('/payments', undefined, session);
+  assert.equal((await paymentHistory.json() as { payments: unknown[] }).payments.length, 2);
 });
