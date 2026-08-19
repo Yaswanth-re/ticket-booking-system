@@ -119,16 +119,11 @@ export default function App() {
   });
 
   const continuePassengers = () => {
-    if (selectedSeats.length === 0) {
-      setMessage('Select at least one seat to continue.');
-      return;
-    }
-    if (selectedSeats.length > 6) {
-      setMessage('You can select a maximum of 6 seats.');
+    if (selectedSeats.length !== search.passengers) {
+      setMessage(`Select exactly ${search.passengers} seat${search.passengers === 1 ? '' : 's'} to continue.`);
       return;
     }
     setMessage('');
-    setSearch((prev) => ({ ...prev, passengers: selectedSeats.length }));
     setPassengers(selectedSeats.map(() => blankPassenger()));
     setPage('passengers');
   };
@@ -318,7 +313,7 @@ export default function App() {
       <div className="page-heading"><div><button className="back-link" onClick={handleBack}>← Back</button><span className="eyebrow">TicketFlow</span><h1>{title}</h1></div>{page === 'results' && <SearchForm compact values={search} onChange={setSearch} onSubmit={searchTickets} isLoading={isLoading} />}</div>
       <ErrorMessage message={message} />
       {page === 'results' && <TicketList tickets={tickets} onSelect={chooseTicket} />}
-      {page === 'seats' && ticket && <section className="booking-layout booking-layout--seats"><div><JourneySummary ticket={ticket} search={search} seats={selectedSeats} passengers={[]} /><SeatGrid seats={seats} selected={selectedSeats} maxSeats={6} vehicle={ticket.vehicle} onChange={(next) => { setSelectedSeats(next); setMessage(''); }} /></div><aside className="action-panel"><span>Selected seats</span><strong>{selectedSeats.length} / 6</strong><small>{selectedSeats.length ? selectedSeats.join(', ') : 'Choose seats from the layout'}</small><hr /><span>Total</span><strong>{formatMoney(ticket.price * selectedSeats.length)}</strong><button className="button button--primary" onClick={continuePassengers}>Continue</button></aside></section>}
+      {page === 'seats' && ticket && <section className="booking-layout booking-layout--seats"><div><JourneySummary ticket={ticket} search={search} seats={selectedSeats} passengers={[]} /><SeatGrid seats={seats} selected={selectedSeats} maxSeats={search.passengers} vehicle={ticket.vehicle} onChange={(next) => { setSelectedSeats(next); setMessage(''); }} /></div><aside className="action-panel"><span>Selected seats</span><strong>{selectedSeats.length} / {search.passengers}</strong><small>{selectedSeats.length ? selectedSeats.join(', ') : 'Choose seats from the layout'}</small><hr /><span>Total</span><strong>{formatMoney(ticket.price * selectedSeats.length)}</strong><button className="button button--primary" onClick={continuePassengers}>Continue</button></aside></section>}
       {page === 'passengers' && <section className="narrow-content">{ticket && <JourneySummary ticket={ticket} search={search} seats={selectedSeats} passengers={passengers} />}<PassengerForm passengers={passengers} seats={selectedSeats} error={message} onChange={(next) => { setPassengers(next); setMessage(''); }} onBack={() => { setMessage(''); setPage('seats'); }} onSubmit={openReview} /></section>}
       {page === 'review' && ticket && <section className="narrow-content"><JourneySummary ticket={ticket} search={search} seats={selectedSeats} passengers={passengers} /><div className="review-passengers"><h2>Passenger details</h2>{passengers.map((passenger, index) => <p key={selectedSeats[index]}><strong>{passenger.fullName}</strong><span>{passenger.age} years · {passenger.gender} · Seat {selectedSeats[index]}</span></p>)}</div><div className="review-total"><span>Total amount</span><strong>{formatMoney(ticket.price * selectedSeats.length)}</strong></div><p className="fine-print">{user ? `Booking as ${user.email}. Continue to choose a local demo payment method.` : 'Log in or create an account to save this reservation securely.'}</p><div className="page-actions"><button className="button button--ghost" onClick={() => setPage('passengers')}>Edit passengers</button><button className="button button--primary" onClick={openPayment} disabled={isLoading}>{user ? 'Continue to payment' : 'Log in to continue'}</button></div></section>}
       {page === 'payment' && ticket && <section className="narrow-content payment-content"><JourneySummary ticket={ticket} search={search} seats={selectedSeats} passengers={passengers} /><PaymentForm amount={ticket.price * selectedSeats.length} method={paymentDraft.method} reference={paymentDraft.reference} isProcessing={isLoading} error={message} onChange={(next) => { setPaymentDraft(next); setMessage(''); }} onBack={() => { setMessage(''); setPage('review'); }} onSubmit={confirmBooking} /></section>}

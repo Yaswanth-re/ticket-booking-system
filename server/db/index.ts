@@ -267,6 +267,62 @@ function seedDatabase() {
       }
     }
 
+    const citiesList = [
+      'Bangalore', 'Chennai', 'Coimbatore', 'Delhi', 'Goa', 'Hyderabad',
+      'Kanyakumari', 'Kochi', 'Madurai', 'Mangalore', 'Mumbai', 'Mysore',
+      'Ooty', 'Pondicherry', 'Pune', 'Tirupati', 'Trichy', 'Vellore',
+      'Vijayawada', 'Visakhapatnam'
+    ];
+    const operators = ['VRL Travels', 'Zingbus', 'IntrCity SmartBus', 'Orange Tours', 'SRS Travels', 'National Travels', 'Paulo Travels', 'Parveen Travels'];
+
+    for (const source of citiesList) {
+      for (const destination of citiesList) {
+        if (source === destination) continue;
+        if (source === 'Chennai' && destination === 'Bangalore') continue;
+
+        const charSum = source.charCodeAt(0) + destination.charCodeAt(0);
+        const opIndex = charSum % operators.length;
+        const operator1 = operators[opIndex];
+        const operator2 = operators[(opIndex + 3) % operators.length];
+
+        const duration = 180 + (charSum % 8) * 60;
+        const price1 = 499 + (charSum % 6) * 150;
+        const price2 = price1 + 250;
+
+        const code1 = `DY-${100 + (charSum * 3) % 899}`;
+        const result1 = insertService.run(
+          operator1, code1, source, destination, '08:00', '14:30', duration, price1, 'AC Seater',
+          4.2, 'Charging Point, Reading Light, Water Bottle',
+          `${source} Bus Station, ${source} Bypass`,
+          `${destination} Bus Stand, ${destination} Drop Circle`
+        );
+        if (result1.changes > 0) {
+          const serviceId = Number(result1.lastInsertRowid);
+          for (let row = 1; row <= 10; row += 1) {
+            for (let column = 1; column <= 4; column += 1) {
+              insertSeat.run(serviceId, `${row}${String.fromCharCode(64 + column)}`, row, column);
+            }
+          }
+        }
+
+        const code2 = `DY-${200 + (charSum * 7) % 899}`;
+        const result2 = insertService.run(
+          operator2, code2, source, destination, '21:30', '05:00', duration + 60, price2, 'AC Sleeper',
+          4.5, 'Wi-Fi, Charging Point, Pillow, Blanket, Water Bottle',
+          `${source} Toll Plaza, ${source} Bus Station`,
+          `${destination} Center, ${destination} Bus Stand`
+        );
+        if (result2.changes > 0) {
+          const serviceId = Number(result2.lastInsertRowid);
+          for (let row = 1; row <= 10; row += 1) {
+            for (let column = 1; column <= 4; column += 1) {
+              insertSeat.run(serviceId, `${row}${String.fromCharCode(64 + column)}`, row, column);
+            }
+          }
+        }
+      }
+    }
+
     if (isFreshDatabase) {
       const date = new Date().toISOString().slice(0, 10);
       const firstService = db.prepare("SELECT id, price FROM services WHERE service_code = 'AT 201'").get() as { id: number; price: number };
